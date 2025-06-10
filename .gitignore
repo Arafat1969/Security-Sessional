@@ -1,0 +1,3 @@
+# Ignore custom folder named pycache and Python __pycache__ directories
+pycache/
+__pycache__/
