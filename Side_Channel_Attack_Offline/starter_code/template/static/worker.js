@@ -1,7 +1,8 @@
 /* Find the cache line size by running `getconf -a | grep CACHE` */
 const LINESIZE = 64;
 /* Find the L3 size by running `getconf -a | grep CACHE` */
-const LLCSIZE = 32 * 1024 * 1024;
+// const LLCSIZE = 32 * 1024 * 1024;
+const LLCSIZE = 8 * 1024 * 1024;
 /* Collect traces for 10 seconds; you can vary this */
 const TIME = 10000;
 /* Collect traces every 10ms; you can vary this */
@@ -16,8 +17,32 @@ function sweep(P) {
      * 4. Store the count in an array of size K, where K = TIME / P.
      * 5. Return the array of counts.
      */
+
+    const K = Math.floor(TIME / P);
+    const buffer = new Uint8Array(LLCSIZE);
+    const result = [];
+
+    for (let k = 0; k < K; k++) {
+        const start = performance.now();
+        let count = 0;
+
+        while (performance.now() - start < P) {
+        for (let i = 0; i < LLCSIZE; i += LINESIZE) {
+            buffer[i];
+        }
+        count++;
+        }
+
+        result.push(count);
+    }
+
+    return result;
 }   
 
 self.addEventListener('message', function(e) {
     /* Call the sweep function and return the result */
+    if (e.data === "start") {
+        const data = sweep(P);
+        self.postMessage(data);
+    }
 });

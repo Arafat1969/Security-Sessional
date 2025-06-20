@@ -55,8 +55,13 @@ def is_server_running(host='127.0.0.1', port=5000):
 def setup_webdriver():
     """Set up the Selenium WebDriver with Chrome options."""
     chrome_options = Options()
+    chrome_options.add_argument("--headless") 
     chrome_options.add_argument("--window-size=1920,1080")
-    service = Service(ChromeDriverManager().install())
+    # chrome_options.add_argument("--disable-infobars")
+    # chrome_options.add_argument("--disable-extensions")
+
+    driver_path = "E:\CSE406\Side_Channel_Attack_Offline\chromedriver-win64\chromedriver.exe"  
+    service = Service(driver_path)
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
@@ -75,11 +80,11 @@ def retrieve_traces_from_backend(driver):
 
 def clear_trace_results(driver, wait):
     """Clear all results from the backend by pressing the button."""
-    clear_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Clear all results')]")
+    clear_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Clear Results')]")
     clear_button.click()
 
     wait.until(EC.text_to_be_present_in_element(
-        (By.XPATH, "//div[@role='alert']"), "Cleared"))
+        (By.XPATH, "//div[@role='alert']"), "Results cleared successfully!"))
     
 def is_collection_complete():
     """Check if target number of traces have been collected."""
@@ -102,6 +107,29 @@ def collect_single_trace(driver, wait, website_url):
     6. Wait for the trace to be collected
     7. Return success or failure status
     """
+    driver.get(FINGERPRINTING_URL)
+    
+    # Step 2: Click "Collect Trace" button
+    wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Collect Trace')]"))).click()
+
+    # Step 3: Open target website in new tab
+    driver.execute_script("window.open(arguments[0]);", website_url)
+    driver.switch_to.window(driver.window_handles[1])
+    
+    # Step 4: Simulate interaction
+    time.sleep(random.uniform(3, 5))
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+    time.sleep(random.uniform(2, 4))
+
+    # Step 5: Close target website tab
+    driver.close()
+    driver.switch_to.window(driver.window_handles[0])
+
+    # Step 6: Wait for backend to finish heatmap generation
+    time.sleep(5)
+
+    return True
+
 
 def collect_fingerprints(driver, target_counts=None):
     """ Implement the main logic to collect fingerprints.
@@ -111,6 +139,28 @@ def collect_fingerprints(driver, target_counts=None):
     4. Save the traces to the database
     5. Return the total number of new traces collected
     """
+    wait = WebDriverWait(driver, 15)
+
+    for website in WEBSITES:
+        current_count = database.db.get_traces_collected().get(website, 0)
+        remaining = TRACES_PER_SITE - current_count
+
+        print(f"Collecting for: {website} ({remaining} remaining)")
+        
+        for _ in range(remaining):
+            try:
+                if collect_single_trace(driver, wait, website):
+                    # Download collected traces from backend
+                    traces = retrieve_traces_from_backend(driver)
+                    
+                    for trace in traces:
+                        database.db.save_trace(website, WEBSITES.index(website), trace)
+
+                    clear_trace_results(driver, wait)
+            except Exception as e:
+                print("Error during collection:", e)
+                traceback.print_exc()
+
 
 def main():
     """ Implement the main function to start the collection process.
@@ -122,6 +172,28 @@ def main():
     6. Export the collected data to a JSON file
     7. Retry if the collection is not complete
     """
+    if not is_server_running():
+        print("Flask server is not running. Start your app.py first.")
+        return
+
+    database.db.init_database()
+    driver = setup_webdriver()
+
+    try:
+        while True:
+            collect_fingerprints(driver)
+            # Check if collection complete
+            remaining = sum(max(0, TRACES_PER_SITE - count) for count in database.db.get_traces_collected().values())
+            if remaining == 0:
+                print("Data collection complete!")
+                break
+            else:
+                print(f"Still remaining traces: {remaining}")
+                time.sleep(2)
+    finally:
+        database.db.export_to_json(OUTPUT_PATH)
+        driver.quit()
+
 
 if __name__ == "__main__":
     main()

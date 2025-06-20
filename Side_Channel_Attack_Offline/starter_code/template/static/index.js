@@ -62,6 +62,44 @@ function app() {
         * 4. Fetch the heatmap from the backend and add it to the local collection.
         * 5. Handle errors and update the status.
         */
+      this.isCollecting = true;
+      this.status = "Collecting trace data...";
+      this.statusIsError = false;
+      this.showingTraces = true;
+
+      try {
+        // Start worker to collect trace
+        let worker = new Worker("worker.js");
+        const trace = await new Promise((resolve) => {
+          worker.onmessage = (e) => resolve(e.data);
+          worker.postMessage("start");
+        });
+        worker.terminate();
+
+        // Send collected trace to backend
+        const response = await fetch("/collect_trace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trace: trace })
+        });
+
+        if (!response.ok) throw new Error("Backend error");
+        const result = await response.json();
+
+        // Store heatmap image locally for display
+        this.heatmaps.push({
+          image: result.image,
+          stats: result.stats
+        });
+        this.traceData.push(trace);
+        this.status = "Trace collected and heatmap generated!";
+      } catch (err) {
+        console.error(err);
+        this.status = "Error: " + err.message;
+        this.statusIsError = true;
+      } finally {
+        this.isCollecting = false;
+      }
     },
 
     // Download the trace data as JSON (array of arrays format for ML)
@@ -72,6 +110,7 @@ function app() {
         * 2. Create a download file with the trace data in JSON format.
         * 3. Handle errors and update the status.
         */
+      
     },
 
     // Clear all results from the server
@@ -82,6 +121,21 @@ function app() {
        * 2. Clear local copies of trace data and heatmaps.
        * 3. Handle errors and update the status.
        */
+      try {
+          // 1. Send request to backend (assuming POST /clear endpoint)
+          const response = await fetch('/api/clear_results', { method: 'POST' });
+          if (!response.ok) throw new Error('Failed to clear results');
+
+          // 2. Optionally clear local data if you have any state management
+          this.traces = [];
+          this.heatmaps = [];
+
+        //alert('Results cleared successfully!');
+        this.status = "Results cleared successfully!";
+      } catch (error) {
+          console.error('Error clearing results:', error);
+          alert('Failed to clear results.');
+      }
     },
   };
 }

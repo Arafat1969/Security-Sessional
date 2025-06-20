@@ -25,7 +25,28 @@
         .results-table {
             margin: 0 auto;
             width: 100%;
-        }        
+        }    
+        
+        
+        .gallery {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .heatmap-item {
+            background-color: rgb(2, 0, 0);
+            box-shadow: 0px 0px 8px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .heatmap-stats {
+            background-color: #0b0e11;
+            padding: 10px;
+            text-align: left;
+            color: #6c757d;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -35,8 +56,11 @@
         <div class="button-group">
             <button @click="collectLatencyData()" :disabled="isCollecting">Collect Latency Data</button>
             <!--Implement Collect Trace button. It should call collectTraceData(). -->
+            <button @click="collectTraceData()" :disabled="isCollecting">Collect Trace</button>
             <!--Implement Download Traces button. It should call downloadTraces(). -->
+            <button @click="downloadTraces()" :disabled="isCollecting">Download Traces</button>
             <!--Implement Clear Results button. It should call clearResults(). -->
+            <button @click="clearResults()" :disabled="isCollecting">Clear Results</button>
         </div>
         
         <div x-show="status" role="alert" x-text="status" 
@@ -67,6 +91,28 @@
         
         <!-- Heatmap gallery for all traces -->
         <!-- Implement UI for showing a list of heatmaps fetched from the server -->
+        <template x-if="heatmaps.length > 0">
+            <div class="results-container">
+                <h3>Trace Heatmaps</h3>
+                <div class="gallery">
+                    <template x-for="(item, index) in heatmaps" :key="index">
+                        <div class="heatmap-item">
+                            <div class="image" style=" color: #444141;">
+                                <img :src="'data:image/png;base64,' + item.image"  style="width: 100%; height: 150px; border: 10px solid #3b3a3a;">
+                            </div>
+                            <div class="heatmap-stats">
+                                Min: <b x-text="item.stats.min"></b>, 
+                                Max: <b x-text="item.stats.max"></b>, 
+                                Range: <b x-text="item.stats.range"></b>, 
+                                Samples: <b x-text="item.stats.samples"></b>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+
     </main>
 
     <script src="index.js"></script>

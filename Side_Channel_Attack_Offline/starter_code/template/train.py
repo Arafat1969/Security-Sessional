@@ -18,8 +18,28 @@ TRAIN_SPLIT = 0.8
 INPUT_SIZE = 1000  
 HIDDEN_SIZE = 128
 
+WEBSITES = [
+    "https://cse.buet.ac.bd/moodle/",
+    "https://google.com",
+    "https://prothomalo.com",
+]
+
+
 # Ensure models directory exists
 os.makedirs(MODELS_DIR, exist_ok=True)
+
+
+class TraceDataset(Dataset):
+    
+    def __init__(self, data):
+        self.traces = [torch.tensor(d['trace_data'], dtype=torch.float32) for d in data]
+        self.labels = [d['website_index'] for d in data]
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return self.traces[idx], self.labels[idx]
 
 
 class FingerprintClassifier(nn.Module):
@@ -263,6 +283,43 @@ def main():
     5. Train and evaluate each model
     6. Print comparison of results
     """
+    with open(DATASET_PATH, 'r') as f:
+        data = json.load(f)
+    
+    # Split the dataset into training and testing
+    labels = [d['website_index'] for d in data]
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - TRAIN_SPLIT)
+    for train_index, test_index in sss.split(np.zeros(len(labels)), labels):
+        train_data = [data[i] for i in train_index]
+        test_data = [data[i] for i in test_index]
+    
+    train_dataset = TraceDataset(train_data)
+    test_dataset = TraceDataset(test_data)
+    
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    
+    # Model 1: FingerprintClassifier
+    model1 = FingerprintClassifier(INPUT_SIZE, HIDDEN_SIZE, len(WEBSITES))
+    criterion = nn.CrossEntropyLoss()
+    optimizer1 = optim.Adam(model1.parameters(), lr=LEARNING_RATE)
+    print("Training FingerprintClassifier model...")
+    best_accuracy1 = train(model1, train_loader, test_loader, criterion, optimizer1, EPOCHS, model_save_path='saved_models/fingerprint_model.pth')
+    print(f"Best accuracy for FingerprintClassifier: {best_accuracy1:.4f}")
+    
+    # Model 2: ComplexFingerprintClassifier
+    model2 = ComplexFingerprintClassifier(INPUT_SIZE, HIDDEN_SIZE, len(WEBSITES))
+    optimizer2 = optim.Adam(model2.parameters(), lr=LEARNING_RATE)
+    print("\nTraining ComplexFingerprintClassifier model...")
+    best_accuracy2 = train(model2, train_loader, test_loader, criterion, optimizer2, EPOCHS, model_save_path='saved_models/complex_model.pth')
+    print(f"Best accuracy for ComplexFingerprintClassifier: {best_accuracy2:.4f}")
+    
+    # Evaluate both models
+    print("\nEvaluating FingerprintClassifier model...")
+    evaluate(model1, test_loader, WEBSITES)
+    
+    print("\nEvaluating ComplexFingerprintClassifier model...")
+    evaluate(model2, test_loader, WEBSITES)
 
 if __name__ == "__main__":
     main()
